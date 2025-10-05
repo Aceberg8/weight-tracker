@@ -1,0 +1,585 @@
+<!--
+Однофайлова офлайн‑програма трекера ваги.
+Інструкція по "Скинути все": натисніть кнопку внизу сторінки. З'явиться підтвердження. Після підтвердження localStorage буде повністю очищено від ключів цієї програми (включно з мовою та цілями), сторінка перерендериться з початковими значеннями. Відмініть дію, якщо не впевнені.
+-->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Трекер веса — офлайн</title>
+  <style>
+    :root{--bg:#0f141a;--panel:#1c2430;--panel2:#222b39;--text:#e6edf3;--muted:#9fb0c0;--accent:#ff6b3d;--accent2:#3dd2ff;--danger:#ff4d4f;--good:#2ecc71;--grid:#334155;--radius:12px;--pad:16px}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+    h1,h2,h3{margin:0 0 8px}
+    .wrap{max-width:1100px;margin:0 auto;padding:24px}
+    header{display:flex;align-items:center;gap:12px;justify-content:space-between;margin-bottom:16px}
+    header .title{display:flex;align-items:center;gap:12px}
+    .brand{font-weight:700;font-size:18px}
+    select, input[type=number], button{background:var(--panel2);border:1px solid #2b3546;color:var(--text);padding:8px 10px;border-radius:10px;outline:none}
+    select:focus, input[type=number]:focus, button:focus{box-shadow:0 0 0 2px #ffffff20,0 0 0 4px var(--accent) inset}
+    button.primary{background:var(--accent);border-color:transparent;color:#111;font-weight:600}
+    button.ghost{background:transparent;border:1px solid var(--muted);color:var(--text)}
+    button.warn{background:transparent;border:1px solid var(--danger);color:var(--danger)}
+    main{display:grid;grid-template-columns:1.1fr 1fr;gap:16px}
+    @media (max-width:900px){main{grid-template-columns:1fr}}
+    .card{background:var(--panel);border:1px solid #263041;border-radius:var(--radius);padding:var(--pad);box-shadow:0 6px 18px #00000025}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+    label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+    .hint{font-size:12px;color:var(--muted);margin-top:4px}
+    .error{color:var(--danger)}
+    .muted{color:var(--muted)}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#0000;border:1px solid #2b3546;color:var(--text);font-size:12px}
+    .pill.good{border-color:#276b45;color:var(--good)}
+    .pill.bad{border-color:#7a2a2a;color:var(--danger)}
+    .stat{display:flex;align-items:center;gap:8px}
+    canvas{width:100%;height:220px;background:linear-gradient(180deg,#1b2330,#17202c);border:1px solid #2b3546;border-radius:10px}
+    .calendar{user-select:none}
+    .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+    .cal-head .nav{display:flex;align-items:center;gap:8px}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+    .weekday{font-size:12px;color:var(--muted);text-align:center;margin-bottom:6px}
+    .cell{background:var(--panel2);border:1px solid #2b3546;border-radius:10px;min-height:76px;padding:6px;cursor:pointer;position:relative}
+    .cell:hover{outline:2px solid #ffffff10}
+    .cell .d{font-size:12px;color:var(--muted)}
+    .cell .badges{position:absolute;right:6px;bottom:6px;display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+    .cell .badge{font-size:11px;padding:2px 6px;border-radius:999px;background:#121923;border:1px solid #2b3546}
+    .cell.today{box-shadow:0 0 0 2px var(--accent) inset}
+    .cell.selected{outline:2px solid var(--accent2)}
+    .cal-actions{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap}
+    .form{margin-top:10px;display:flex;flex-direction:column;gap:10px}
+    .toast-wrap{position:fixed;top:12px;right:12px;display:flex;flex-direction:column;gap:8px;z-index:9999}
+    .toast{background:#0e151e;border:1px solid #263041;color:var(--text);padding:10px 12px;border-radius:10px;box-shadow:0 10px 30px #0000003a;opacity:0;transform:translateY(-6px);animation:pop 3.2s ease forwards}
+    @keyframes pop{0%{opacity:0;transform:translateY(-6px)}10%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0;transform:translateY(-6px)}}
+    .sep{height:1px;background:#283345;margin:12px 0}
+    .footer{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+    .grid2{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="title">
+        <span class="brand" id="appTitle">Трекер веса</span>
+        <span class="pill" id="todayPill"></span>
+      </div>
+      <div class="row" style="grid-template-columns:auto auto;gap:8px">
+        <label style="min-width:160px">
+          <span id="langLabel" class="muted">Язык</span>
+          <select id="langSelect" aria-label="Language">
+            <option value="ru">Русский</option>
+            <option value="kk">Қазақша</option>
+          </select>
+        </label>
+        <button id="resetAllBtn" class="warn" type="button">Сбросить всё</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- Вага / цілі -->
+      <section class="card" aria-labelledby="w-title">
+        <h2 id="w-title">Вес</h2>
+        <div class="row">
+          <label>
+            <span id="curWLabel">Вес</span>
+            <input id="currentWeight" type="number" min="20" max="400" step="0.1" inputmode="decimal" placeholder="80"/>
+            <div id="curWErr" class="hint error" hidden></div>
+          </label>
+          <label>
+            <span id="tgtWLabel">Целевой вес</span>
+            <input id="targetWeight" type="number" min="20" max="400" step="0.1" inputmode="decimal" placeholder="70"/>
+            <div id="tgtWErr" class="hint error" hidden></div>
+          </label>
+        </div>
+        <div class="row3" style="margin-top:10px">
+          <div class="stat">
+            <strong id="diffLabel">Разница</strong>
+            <span class="pill" id="diffVal">—</span>
+          </div>
+          <div class="stat">
+            <strong id="trendLabel">Тренд</strong>
+            <span class="pill" id="trendVal">—</span>
+          </div>
+        </div>
+        <div class="sep"></div>
+        <div class="stat" style="margin-bottom:6px"><strong id="weekTitle">Прогресс за 7 дней</strong></div>
+        <canvas id="chart" width="800" height="240" role="img" aria-label="График веса за 7 дней"></canvas>
+      </section>
+
+      <!-- Календар / щоденний запис -->
+      <section class="card calendar" aria-labelledby="cal-title">
+        <div class="cal-head">
+          <h2 id="cal-title">Календарь</h2>
+          <div class="nav">
+            <button class="ghost" id="prevMonth" type="button">‹ <span id="prevLabel">Пред</span></button>
+            <div class="pill" id="monthCaption">—</div>
+            <button class="ghost" id="nextMonth" type="button"><span id="nextLabel">След</span> ›</button>
+          </div>
+        </div>
+        <div class="cal-grid" id="weekdayHead"></div>
+        <div class="cal-grid" id="calGrid" aria-live="polite"></div>
+
+        <div class="form">
+          <div class="row3">
+            <label>
+              <span id="consumedLabel">Потреблённые калории</span>
+              <input id="consumed" type="number" min="0" max="10000" step="1" inputmode="numeric" placeholder="0"/>
+              <div id="consErr" class="hint error" hidden></div>
+            </label>
+            <label>
+              <span id="workoutLabel">Тренировка</span>
+              <select id="workout">
+                <option value="none" data-kcal="0">Нет</option>
+                <option value="light" data-kcal="200">Лёгкая −200</option>
+                <option value="medium" data-kcal="300">Средняя −300</option>
+                <option value="hard" data-kcal="400">Тяжёлая −400</option>
+              </select>
+            </label>
+            <label>
+              <span id="netLabel">Чистые калории</span>
+              <input id="net" type="number" readonly />
+            </label>
+          </div>
+          <div class="row">
+            <label>
+              <span id="wOnDateLabel">Вес на дату</span>
+              <input id="weightOnDate" type="number" min="20" max="400" step="0.1" inputmode="decimal" placeholder="—"/>
+              <div id="wDateErr" class="hint error" hidden></div>
+            </label>
+            <div class="grid2">
+              <button id="saveBtn" class="primary" type="button">Сохранить</button>
+              <button id="clearBtn" class="ghost" type="button">Очистить день</button>
+            </div>
+          </div>
+          <div class="footer">
+            <div class="muted" id="selectedDateText">—</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast-wrap" id="toasts"></div>
+  </div>
+
+  <script>
+    // i18n словник
+    const i18n = {
+      ru:{appTitle:"Трекер веса",weight:"Вес",targetWeight:"Целевой вес",diff:"Разница",weekProgress:"Прогресс за 7 дней",calendar:"Календарь",consumed:"Потреблённые калории",workout:"Тренировка",none:"Нет",light:"Лёгкая −200",medium:"Средняя −300",hard:"Тяжёлая −400",net:"Чистые калории",save:"Сохранить",clearDay:"Очистить день",resetAll:"Сбросить всё",weightOnDate:"Вес на дату",today:"Сегодня",monthPrev:"Пред",monthNext:"След",kg:"кг",kcal:"ккал",saved:"Сохранено",cleared:"Очищено",confirmReset:"Удалить все данные? Отменить нельзя.",lang:"Язык",trend:"Тренд",towards:"движение к цели",away:"удаление",noTrend:"недостаточно данных",selectDate:"Выбрана дата:",invalid:"Некорректное значение"},
+      kk:{appTitle:"Салмақ трекері",weight:"Салмақ",targetWeight:"Мақсатты салмақ",diff:"Айырма",weekProgress:"7 күндік прогресс",calendar:"Күнтізбе",consumed:"Тұтынған калория",workout:"Жаттығу",none:"Жоқ",light:"Жеңіл −200",medium:"Орташа −300",hard:"Ауыр −400",net:"Таза калория",save:"Сақтау",clearDay:"Күнді тазалау",resetAll:"Барлығын тазарту",weightOnDate:"Күнгі салмақ",today:"Бүгін",monthPrev:"Алдыңғы",monthNext:"Келесі",kg:"кг",kcal:"ккал",saved:"Сақталды",cleared:"Тазаланды",confirmReset:"Барлық деректер өшірілсін бе? Бұл қайтарылмайды.",lang:"Тіл",trend:"Бейім",towards:"мақсатқа жақындау",away:"алыстау",noTrend:"дерек жеткіліксіз",selectDate:"Таңдалған күн:",invalid:"Дұрыс емес мән"}
+    };
+
+    // Глобальний стан
+    const els = {};
+    const SETTINGS_KEY = 'wt:settings';
+
+    const workoutMap = {none:0, light:200, medium:300, hard:400};
+
+    function t(key){
+      const lang = getSettings().lang || 'ru';
+      return (i18n[lang] && i18n[lang][key]) || key;
+    }
+
+    function setLang(lang){
+      const s = getSettings(); s.lang = lang; saveSettings(s); applyI18n(); renderCalendar(); renderChart(); computeTrend(); toast('✓ '+t('saved'));
+    }
+
+    function getSettings(){
+      try{ return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {currentWeight:null,targetWeight:null,lang:'ru'} }catch{ return {currentWeight:null,targetWeight:null,lang:'ru'} }
+    }
+    function saveSettings(s){ localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
+
+    function kForDate(dateStr){ return dateStr; } // ключ дня = YYYY-MM-DD
+
+    function loadDay(dateStr){
+      try{ return JSON.parse(localStorage.getItem(kForDate(dateStr))) || null }catch{ return null }
+    }
+
+    function saveDay(){
+      const dateStr = state.selected.toISOString().slice(0,10);
+      const consumed = numOrNull(els.consumed.value);
+      const wo = els.workout.value;
+      const woKcal = workoutMap[wo]||0;
+      const weight = numOrNull(els.weightOnDate.value);
+
+      // валідація
+      if(consumed!=null && !inRange(consumed,0,10000)) return fieldError(els.consumed,'invalid'); else clearFieldError(els.consumed);
+      if(weight!=null && !inRange(weight,20,400)) return fieldError(els.weightOnDate,'invalid'); else clearFieldError(els.weightOnDate);
+
+      const netCalories = consumed!=null ? (consumed - woKcal) : null;
+      const rec = {date:dateStr, weight, consumed, workout:wo, workoutCalories:woKcal, netCalories};
+      localStorage.setItem(kForDate(dateStr), JSON.stringify(rec));
+      toast('✓ '+t('saved'));
+      renderCalendar(); renderChart(); computeTrend(); updateDayBadgesInHeader(dateStr, rec);
+    }
+
+    function clearDay(){
+      const dateStr = state.selected.toISOString().slice(0,10);
+      localStorage.removeItem(kForDate(dateStr));
+      els.consumed.value = '';
+      els.workout.value = 'none';
+      els.net.value = '';
+      els.weightOnDate.value = '';
+      toast('• '+t('cleared'));
+      renderCalendar(); renderChart(); computeTrend(); updateSelectedDateText();
+    }
+
+    function numOrNull(v){ if(v==='' || v===null || v===undefined) return null; const n=Number(v); return Number.isFinite(n)?n:null }
+    function inRange(n,min,max){ return typeof n==='number' && n>=min && n<=max }
+
+    function fieldError(input,key){ const err = input.nextElementSibling; if(err){ err.textContent = t(key); err.hidden=false } input.focus(); }
+    function clearFieldError(input){ const err = input.nextElementSibling; if(err){ err.hidden=true } }
+
+    const state = {viewYear:0, viewMonth:0, selected:new Date()};
+
+    function startOfMonth(y,m){ return new Date(y,m,1) }
+    function daysInMonth(y,m){ return new Date(y,m+1,0).getDate() }
+
+    function renderCalendar(){
+      const lang = getSettings().lang;
+      const tzAdjust = (d)=> new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+      const today = tzAdjust(new Date());
+      if(!state.viewYear){ const d=new Date(); state.viewYear=d.getFullYear(); state.viewMonth=d.getMonth(); }
+
+      // Заголовок місяця
+      const caption = new Date(state.viewYear, state.viewMonth, 1).toLocaleDateString(lang==='kk'?'kk-KZ':'ru-RU',{month:'long',year:'numeric'});
+      els.monthCaption.textContent = caption;
+      els.prevLabel.textContent = t('monthPrev');
+      els.nextLabel.textContent = t('monthNext');
+
+      // Шапка днів тижня
+      els.weekdayHead.innerHTML='';
+      const fmt = new Intl.DateTimeFormat(lang==='kk'?'kk-KZ':'ru-RU',{weekday:'short'});
+      const start = new Date(2023,0,2); // понеділок
+      for(let i=0;i<7;i++){
+        const d = new Date(start.getTime()+i*86400000);
+        const el = document.createElement('div');
+        el.className='weekday';
+        el.textContent = fmt.format(d).slice(0,2);
+        els.weekdayHead.appendChild(el);
+      }
+
+      // Сітка 7x6
+      els.calGrid.innerHTML='';
+      const firstDow = (new Date(state.viewYear, state.viewMonth,1).getDay()+6)%7; // 0=Mon
+      const dim = daysInMonth(state.viewYear, state.viewMonth);
+      const totalCells = 42;
+      for(let i=0;i<totalCells;i++){
+        const cell = document.createElement('button');
+        cell.type='button'; cell.className='cell';
+        const dayNum = i-firstDow+1;
+        let dateForCell = null;
+        if(dayNum>=1 && dayNum<=dim){
+          dateForCell = new Date(state.viewYear, state.viewMonth, dayNum);
+          const key = dateForCell.toISOString().slice(0,10);
+          const rec = loadDay(key);
+          cell.innerHTML = `<div class="d">${dayNum}</div><div class="badges"></div>`;
+          const badges = cell.querySelector('.badges');
+          if(rec){
+            if(rec.weight!=null){
+              const b = document.createElement('div'); b.className='badge'; b.textContent = rec.weight+ ' '+t('kg'); badges.appendChild(b);
+            }
+            if(rec.netCalories!=null){
+              const b2 = document.createElement('div'); b2.className='badge'; b2.textContent = rec.netCalories+ ' '+t('kcal'); badges.appendChild(b2);
+            }
+          }
+          // today
+          if(dateForCell.toDateString()===today.toDateString()) cell.classList.add('today');
+        }else{
+          cell.style.visibility='hidden';
+        }
+        if(dateForCell){
+          cell.addEventListener('click',()=>{ state.selected = dateForCell; updateSelectedDateText(); populateFormFromDay(); highlightSelectedCell(keySel()); });
+        }
+        els.calGrid.appendChild(cell);
+      }
+      highlightSelectedCell(keySel());
+    }
+
+    function keySel(){ return state.selected.toISOString().slice(0,10) }
+
+    function highlightSelectedCell(dateStr){
+      const nodes = els.calGrid.querySelectorAll('.cell');
+      nodes.forEach(n=>n.classList.remove('selected'));
+      nodes.forEach(n=>{
+        if(n.style.visibility==='hidden') return;
+        const dEl = n.querySelector('.d'); if(!dEl) return; const day = dEl.textContent.trim();
+        const d = new Date(state.viewYear, state.viewMonth, Number(day));
+        if(d.toISOString().slice(0,10)===dateStr) n.classList.add('selected');
+      });
+    }
+
+    function updateSelectedDateText(){
+      const lang = getSettings().lang;
+      els.selectedDateText.textContent = t('selectDate')+' '+ state.selected.toLocaleDateString(lang==='kk'?'kk-KZ':'ru-RU');
+    }
+
+    function populateFormFromDay(){
+      const rec = loadDay(keySel());
+      els.consumed.value = rec && rec.consumed!=null ? rec.consumed : '';
+      els.workout.value = rec ? (rec.workout||'none') : 'none';
+      els.weightOnDate.value = rec && rec.weight!=null ? rec.weight : '';
+      const wo = workoutMap[els.workout.value]||0;
+      const c = numOrNull(els.consumed.value);
+      els.net.value = c!=null ? (c-wo) : '';
+    }
+
+    function updateDayBadgesInHeader(dateStr, rec){ /* no-op placeholder - badges обновляются при renderCalendar */ }
+
+    function applyI18n(){
+      const s = getSettings();
+      els.appTitle.textContent = t('appTitle');
+      els.langLabel.textContent = t('lang');
+      els.resetAllBtn.textContent = t('resetAll');
+      els.wTitle.textContent = t('weight');
+      els.curWLabel.textContent = t('weight');
+      els.tgtWLabel.textContent = t('targetWeight');
+      els.diffLabel.textContent = t('diff');
+      els.trendLabel.textContent = t('trend');
+      els.weekTitle.textContent = t('weekProgress');
+      els.calTitle.textContent = t('calendar');
+      els.prevLabel.textContent = t('monthPrev');
+      els.nextLabel.textContent = t('monthNext');
+      els.consumedLabel.textContent = t('consumed');
+      // workout options
+      els.workout.options[0].textContent = t('none');
+      els.workout.options[1].textContent = t('light');
+      els.workout.options[2].textContent = t('medium');
+      els.workout.options[3].textContent = t('hard');
+      els.netLabel.textContent = t('net');
+      els.wOnDateLabel.textContent = t('weightOnDate');
+      els.saveBtn.textContent = t('save');
+      els.clearBtn.textContent = t('clearDay');
+
+      const langTag = s.lang==='kk'?'kk-KZ':'ru-RU';
+      document.documentElement.lang = s.lang;
+      els.todayPill.textContent = t('today')+': '+ new Date().toLocaleDateString(langTag);
+      // плейсхолдери одиниць
+      updateDiff(); computeTrend(); renderChart();
+    }
+
+    function updateDiff(){
+      const s = getSettings();
+      const cw = numOrNull(els.currentWeight.value);
+      const tw = numOrNull(els.targetWeight.value);
+      // вал
+      let ok=true;
+      if(cw!=null && !inRange(cw,20,400)){ fieldError(els.currentWeight,'invalid'); ok=false } else clearFieldError(els.currentWeight);
+      if(tw!=null && !inRange(tw,20,400)){ fieldError(els.targetWeight,'invalid'); ok=false } else clearFieldError(els.targetWeight);
+      if(!ok) return;
+      s.currentWeight = cw; s.targetWeight = tw; saveSettings(s);
+      const tv = cw!=null && tw!=null ? (cw - tw) : null;
+      els.diffVal.textContent = tv!=null ? (tv.toFixed(1)+' '+t('kg')) : '—';
+    }
+
+    function gatherLast7(){
+      const out=[];
+      const today = new Date();
+      for(let i=6;i>=0;i--){
+        const d = new Date(today.getFullYear(), today.getMonth(), today.getDate()-i);
+        const key = d.toISOString().slice(0,10);
+        const rec = loadDay(key);
+        out.push({date:d, key, weight:rec && rec.weight!=null ? rec.weight : null});
+      }
+      return out;
+    }
+
+    function renderChart(){
+      const c = els.chart.getContext('2d');
+      const W = els.chart.width, H = els.chart.height;
+      c.clearRect(0,0,W,H);
+
+      const pts = gatherLast7();
+      const weights = pts.map(p=>p.weight).filter(v=>v!=null);
+      // осі
+      c.strokeStyle = '#2b3546'; c.lineWidth=1;
+      // рамка
+      c.strokeRect(40,10,W-60,H-40);
+      // сітка & підписи X
+      c.fillStyle = '#9fb0c0'; c.font = '12px system-ui'; c.textAlign='center';
+      for(let i=0;i<7;i++){
+        const x = 40 + i*(W-60)/6;
+        c.beginPath(); c.moveTo(x,10); c.lineTo(x,H-30); c.strokeStyle='#263041'; c.stroke();
+        const d = pts[i].date.getDate();
+        c.fillText(String(d), x, H-14);
+      }
+
+      // масштаб Y
+      let min = Math.min(...weights, 40), max = Math.max(...weights, 100);
+      if(weights.length){
+        min = Math.min(...weights); max = Math.max(...weights);
+        if(min===max){ min -= 1; max += 1 }
+      } else { min=40; max=100 }
+      const pad = (max-min)*0.1 || 1; min-=pad; max+=pad;
+      function yFor(val){ return 10 + (H-40) * (1 - (val-min)/(max-min)); }
+
+      // горизонтальні лінії та підписи Y
+      c.textAlign='right';
+      const steps = 4;
+      for(let i=0;i<=steps;i++){
+        const v = min + (max-min)*i/steps;
+        const y = yFor(v);
+        c.strokeStyle='#263041'; c.beginPath(); c.moveTo(40,y); c.lineTo(W-20,y); c.stroke();
+        c.fillStyle='#9fb0c0'; c.fillText(v.toFixed(1), 36, y+4);
+      }
+
+      // точки
+      const coords = pts.map((p,i)=>{
+        const x = 40 + i*(W-60)/6;
+        const y = p.weight!=null ? yFor(p.weight) : null;
+        return {x,y,has:p.weight!=null}
+      });
+
+      // лінії лише між сусідніми існуючими
+      c.lineWidth=2; c.strokeStyle= getSettings().lang==='kk'? '#3dd2ff':'#ff6b3d';
+      c.beginPath();
+      for(let i=0;i<coords.length-1;i++){
+        const a=coords[i], b=coords[i+1];
+        if(a.has && b.has){ c.moveTo(a.x,a.y); c.lineTo(b.x,b.y); }
+      }
+      c.stroke();
+
+      // точки поверх
+      coords.forEach(pt=>{
+        if(pt.has){ c.fillStyle='#e6edf3'; c.beginPath(); c.arc(pt.x, pt.y, 3, 0, Math.PI*2); c.fill(); }
+      });
+    }
+
+    function computeTrend(){
+      const pts = gatherLast7().map(p=>p.weight).filter(v=>v!=null);
+      const el = els.trendVal; el.classList.remove('good','bad');
+      if(pts.length<2){ el.textContent = t('noTrend'); return }
+      const first = pts[0], last = pts[pts.length-1];
+      const s = getSettings();
+      const target = s.targetWeight!=null ? s.targetWeight : last;
+      const distStart = Math.abs(first - target);
+      const distEnd = Math.abs(last - target);
+      if(distEnd < distStart){ el.textContent = t('towards'); el.classList.add('good') }
+      else if(distEnd > distStart){ el.textContent = t('away'); el.classList.add('bad') }
+      else { el.textContent = t('noTrend') }
+    }
+
+    function toast(msg){
+      const tEl = document.createElement('div'); tEl.className='toast'; tEl.textContent = msg; els.toasts.appendChild(tEl);
+      setTimeout(()=>{ tEl.remove() }, 3100);
+    }
+
+    function onWorkoutChange(){
+      const c = numOrNull(els.consumed.value);
+      const wo = workoutMap[els.workout.value]||0;
+      els.net.value = c!=null ? (c-wo) : '';
+    }
+
+    function onConsumedChange(){
+      const c = numOrNull(els.consumed.value);
+      if(c!=null && !inRange(c,0,10000)) fieldError(els.consumed,'invalid'); else clearFieldError(els.consumed);
+      onWorkoutChange();
+    }
+
+    function resetAll(){
+      if(confirm(t('confirmReset'))){
+        // Видаляємо лише ключі цієї програми
+        const toRemove=[];
+        for(let i=0;i<localStorage.length;i++){
+          const k = localStorage.key(i);
+          if(!k) continue;
+          if(k===SETTINGS_KEY) toRemove.push(k);
+          else if(/^\d{4}-\d{2}-\d{2}$/.test(k)) toRemove.push(k);
+        }
+        toRemove.forEach(k=>localStorage.removeItem(k));
+        toast('• '+t('cleared'));
+        // Скидання стану
+        els.currentWeight.value=''; els.targetWeight.value=''; updateDiff();
+        state.viewYear=0; state.viewMonth=0; state.selected=new Date();
+        renderCalendar(); renderChart(); computeTrend(); applyI18n(); populateFormFromDay(); updateSelectedDateText();
+      }
+    }
+
+    function cacheEls(){
+      els.appTitle = document.getElementById('appTitle');
+      els.todayPill = document.getElementById('todayPill');
+      els.langLabel = document.getElementById('langLabel');
+      els.langSelect = document.getElementById('langSelect');
+      els.resetAllBtn = document.getElementById('resetAllBtn');
+
+      els.wTitle = document.getElementById('w-title');
+      els.curWLabel = document.getElementById('curWLabel');
+      els.tgtWLabel = document.getElementById('tgtWLabel');
+      els.diffLabel = document.getElementById('diffLabel');
+      els.trendLabel = document.getElementById('trendLabel');
+      els.weekTitle = document.getElementById('weekTitle');
+      els.chart = document.getElementById('chart');
+
+      els.calTitle = document.getElementById('cal-title');
+      els.prevMonth = document.getElementById('prevMonth');
+      els.nextMonth = document.getElementById('nextMonth');
+      els.prevLabel = document.getElementById('prevLabel');
+      els.nextLabel = document.getElementById('nextLabel');
+      els.monthCaption = document.getElementById('monthCaption');
+      els.weekdayHead = document.getElementById('weekdayHead');
+      els.calGrid = document.getElementById('calGrid');
+
+      els.consumedLabel = document.getElementById('consumedLabel');
+      els.workoutLabel = document.getElementById('workoutLabel');
+      els.netLabel = document.getElementById('netLabel');
+      els.wOnDateLabel = document.getElementById('wOnDateLabel');
+      els.saveBtn = document.getElementById('saveBtn');
+      els.clearBtn = document.getElementById('clearBtn');
+      els.selectedDateText = document.getElementById('selectedDateText');
+
+      els.currentWeight = document.getElementById('currentWeight');
+      els.targetWeight = document.getElementById('targetWeight');
+      els.diffVal = document.getElementById('diffVal');
+      els.trendVal = document.getElementById('trendVal');
+
+      els.consumed = document.getElementById('consumed');
+      els.workout = document.getElementById('workout');
+      els.net = document.getElementById('net');
+      els.weightOnDate = document.getElementById('weightOnDate');
+
+      els.curWErr = document.getElementById('curWErr');
+      els.tgtWErr = document.getElementById('tgtWErr');
+      els.consErr = document.getElementById('consErr');
+      els.wDateErr = document.getElementById('wDateErr');
+
+      els.toasts = document.getElementById('toasts');
+    }
+
+    function bind(){
+      els.langSelect.addEventListener('change', e=> setLang(e.target.value));
+      els.resetAllBtn.addEventListener('click', resetAll);
+      els.prevMonth.addEventListener('click', ()=>{ if(state.viewMonth===0){ state.viewMonth=11; state.viewYear-- } else state.viewMonth--; renderCalendar() });
+      els.nextMonth.addEventListener('click', ()=>{ if(state.viewMonth===11){ state.viewMonth=0; state.viewYear++ } else state.viewMonth++; renderCalendar() });
+
+      els.consumed.addEventListener('input', onConsumedChange);
+      els.workout.addEventListener('change', onWorkoutChange);
+      els.weightOnDate.addEventListener('input', ()=>{
+        const w = numOrNull(els.weightOnDate.value);
+        if(w!=null && !inRange(w,20,400)) fieldError(els.weightOnDate,'invalid'); else clearFieldError(els.weightOnDate);
+      });
+      els.saveBtn.addEventListener('click', saveDay);
+      els.clearBtn.addEventListener('click', clearDay);
+
+      els.currentWeight.addEventListener('input', updateDiff);
+      els.targetWeight.addEventListener('input', updateDiff);
+    }
+
+    function init(){
+      cacheEls(); bind();
+      // налаштування
+      const s = getSettings();
+      els.langSelect.value = s.lang||'ru';
+      if(s.currentWeight!=null) els.currentWeight.value = s.currentWeight;
+      if(s.targetWeight!=null) els.targetWeight.value = s.targetWeight;
+      applyI18n(); updateDiff();
+
+      state.selected = new Date(); updateSelectedDateText();
+      renderCalendar(); populateFormFromDay(); renderChart(); computeTrend();
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
