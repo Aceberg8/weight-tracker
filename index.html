@@ -1,24 +1,25 @@
 <!--
-Однофайлова офлайн‑програма трекера ваги.
+Однофайлова офлайн-програма трекера ваги.
 Інструкція по "Скинути все": натисніть кнопку внизу сторінки. З'явиться підтвердження. Після підтвердження localStorage буде повністю очищено від ключів цієї програми (включно з мовою та цілями), сторінка перерендериться з початковими значеннями. Відмініть дію, якщо не впевнені.
 -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f141a" />
   <title>Трекер веса — офлайн</title>
   <style>
     :root{--bg:#0f141a;--panel:#1c2430;--panel2:#222b39;--text:#e6edf3;--muted:#9fb0c0;--accent:#ff6b3d;--accent2:#3dd2ff;--danger:#ff4d4f;--good:#2ecc71;--grid:#334155;--radius:12px;--pad:16px}
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+    body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;-webkit-tap-highlight-color:transparent}
     h1,h2,h3{margin:0 0 8px}
     .wrap{max-width:1100px;margin:0 auto;padding:24px}
-    header{display:flex;align-items:center;gap:12px;justify-content:space-between;margin-bottom:16px}
+    header{display:flex;align-items:center;gap:12px;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap}
     header .title{display:flex;align-items:center;gap:12px}
     .brand{font-weight:700;font-size:18px}
-    select, input[type=number], button{background:var(--panel2);border:1px solid #2b3546;color:var(--text);padding:8px 10px;border-radius:10px;outline:none}
+    select, input[type=number], button{background:var(--panel2);border:1px solid #2b3546;color:var(--text);padding:10px 12px;border-radius:12px;outline:none;min-height:44px}
     select:focus, input[type=number]:focus, button:focus{box-shadow:0 0 0 2px #ffffff20,0 0 0 4px var(--accent) inset}
     button.primary{background:var(--accent);border-color:transparent;color:#111;font-weight:600}
     button.ghost{background:transparent;border:1px solid var(--muted);color:var(--text)}
@@ -36,9 +37,10 @@
     .pill.good{border-color:#276b45;color:var(--good)}
     .pill.bad{border-color:#7a2a2a;color:var(--danger)}
     .stat{display:flex;align-items:center;gap:8px}
-    canvas{width:100%;height:220px;background:linear-gradient(180deg,#1b2330,#17202c);border:1px solid #2b3546;border-radius:10px}
+    /* Canvas: responsively sized via JS to devicePixelRatio */
+    #chart{display:block;width:100%;height:220px;background:linear-gradient(180deg,#1b2330,#17202c);border:1px solid #2b3546;border-radius:10px}
     .calendar{user-select:none}
-    .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+    .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap}
     .cal-head .nav{display:flex;align-items:center;gap:8px}
     .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
     .weekday{font-size:12px;color:var(--muted);text-align:center;margin-bottom:6px}
@@ -57,6 +59,16 @@
     .sep{height:1px;background:#283345;margin:12px 0}
     .footer{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
     .grid2{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}
+    /* Мобільні покращення */
+    @media (max-width:640px){
+      .wrap{padding:16px}
+      header{gap:8px}
+      .brand{font-size:16px}
+      .row,.row3{grid-template-columns:1fr}
+      .cell{min-height:64px}
+      #chart{height:180px}
+      .cal-head .nav .pill{display:none}
+    }
   </style>
 </head>
 <body>
@@ -326,7 +338,7 @@
       els.net.value = c!=null ? (c-wo) : '';
     }
 
-    function updateDayBadgesInHeader(dateStr, rec){ /* no-op placeholder - badges обновляются при renderCalendar */ }
+    function updateDayBadgesInHeader(dateStr, rec){ /* badges оновлюються при renderCalendar */ }
 
     function applyI18n(){
       const s = getSettings();
@@ -356,7 +368,6 @@
       const langTag = s.lang==='kk'?'kk-KZ':'ru-RU';
       document.documentElement.lang = s.lang;
       els.todayPill.textContent = t('today')+': '+ new Date().toLocaleDateString(langTag);
-      // плейсхолдери одиниць
       updateDiff(); computeTrend(); renderChart();
     }
 
@@ -364,7 +375,6 @@
       const s = getSettings();
       const cw = numOrNull(els.currentWeight.value);
       const tw = numOrNull(els.targetWeight.value);
-      // вал
       let ok=true;
       if(cw!=null && !inRange(cw,20,400)){ fieldError(els.currentWeight,'invalid'); ok=false } else clearFieldError(els.currentWeight);
       if(tw!=null && !inRange(tw,20,400)){ fieldError(els.targetWeight,'invalid'); ok=false } else clearFieldError(els.targetWeight);
@@ -386,18 +396,33 @@
       return out;
     }
 
+    // Responsive canvas rendering with DPR
+    function sizeCanvasToContainer(){
+      const canvas = els.chart;
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio||1, 3));
+      const cssW = Math.floor(rect.width);
+      const cssH = Math.floor(rect.height);
+      const needResize = canvas.width !== Math.floor(cssW*dpr) || canvas.height !== Math.floor(cssH*dpr);
+      if(needResize){
+        canvas.width = Math.floor(cssW*dpr);
+        canvas.height = Math.floor(cssH*dpr);
+      }
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+
     function renderChart(){
+      sizeCanvasToContainer();
       const c = els.chart.getContext('2d');
-      const W = els.chart.width, H = els.chart.height;
+      const rect = els.chart.getBoundingClientRect();
+      const W = rect.width, H = rect.height;
       c.clearRect(0,0,W,H);
 
       const pts = gatherLast7();
       const weights = pts.map(p=>p.weight).filter(v=>v!=null);
-      // осі
       c.strokeStyle = '#2b3546'; c.lineWidth=1;
-      // рамка
       c.strokeRect(40,10,W-60,H-40);
-      // сітка & підписи X
       c.fillStyle = '#9fb0c0'; c.font = '12px system-ui'; c.textAlign='center';
       for(let i=0;i<7;i++){
         const x = 40 + i*(W-60)/6;
@@ -406,7 +431,6 @@
         c.fillText(String(d), x, H-14);
       }
 
-      // масштаб Y
       let min = Math.min(...weights, 40), max = Math.max(...weights, 100);
       if(weights.length){
         min = Math.min(...weights); max = Math.max(...weights);
@@ -415,7 +439,6 @@
       const pad = (max-min)*0.1 || 1; min-=pad; max+=pad;
       function yFor(val){ return 10 + (H-40) * (1 - (val-min)/(max-min)); }
 
-      // горизонтальні лінії та підписи Y
       c.textAlign='right';
       const steps = 4;
       for(let i=0;i<=steps;i++){
@@ -425,14 +448,12 @@
         c.fillStyle='#9fb0c0'; c.fillText(v.toFixed(1), 36, y+4);
       }
 
-      // точки
       const coords = pts.map((p,i)=>{
         const x = 40 + i*(W-60)/6;
         const y = p.weight!=null ? yFor(p.weight) : null;
         return {x,y,has:p.weight!=null}
       });
 
-      // лінії лише між сусідніми існуючими
       c.lineWidth=2; c.strokeStyle= getSettings().lang==='kk'? '#3dd2ff':'#ff6b3d';
       c.beginPath();
       for(let i=0;i<coords.length-1;i++){
@@ -441,10 +462,7 @@
       }
       c.stroke();
 
-      // точки поверх
-      coords.forEach(pt=>{
-        if(pt.has){ c.fillStyle='#e6edf3'; c.beginPath(); c.arc(pt.x, pt.y, 3, 0, Math.PI*2); c.fill(); }
-      });
+      coords.forEach(pt=>{ if(pt.has){ c.fillStyle='#e6edf3'; c.beginPath(); c.arc(pt.x, pt.y, 3, 0, Math.PI*2); c.fill(); } });
     }
 
     function computeTrend(){
@@ -564,11 +582,14 @@
 
       els.currentWeight.addEventListener('input', updateDiff);
       els.targetWeight.addEventListener('input', updateDiff);
+
+      // ререндер графіка при зміні розміру екрана
+      let rafId=null; const onResize=()=>{ cancelAnimationFrame(rafId); rafId=requestAnimationFrame(()=>{ renderChart(); }); };
+      window.addEventListener('resize', onResize);
     }
 
     function init(){
       cacheEls(); bind();
-      // налаштування
       const s = getSettings();
       els.langSelect.value = s.lang||'ru';
       if(s.currentWeight!=null) els.currentWeight.value = s.currentWeight;
